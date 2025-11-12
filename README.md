@@ -36,5 +36,7 @@ with traffic regulations.
 that provide other agents’ states and the traffic light status.
 
 ## Sketches of Solution
-We start this with SARSA: $Q(s,a)←Q(s,a)+\alpha (r + \gamma Q(s', a') - Q(s, a))$.
+The first algorithm is SARSA with linear function approximation. Instead of updating $Q(s,a)←Q(s,a)+\alpha (r + \gamma Q(s', a') - Q(s, a))$, we use a parametric $Q(s, a; \theta)$, and update the parametres by:
+* $\delta = r + \gamma Q(s', a'; \theta) - Q(s, a; \theta)$
+* $\theta = \theta + \alpha \delta \nabla _{\theta} Q(s, a; \theta)$
 
