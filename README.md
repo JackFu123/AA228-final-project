@@ -26,9 +26,8 @@ of all agents, and the states of the traffic lights at the intersection.
 * Actions: The set of possible maneuvers the autonomous vehicle can take, such as
 accelerating, decelerating, stopping, turning left, turning right, or going straight. The
 actions can be classified into longitudinal and lateral behaviors.
-* Transitions: The probabilistic model describing how the environment evolves in re-
-sponse to the vehicle’s actions, influenced by the behavior of other agents and traffic
-light changes.
+* Transitions: The probabilistic model describing how the environment evolves in response
+to the vehicle’s actions, influenced by the behavior of other agents and traffic light changes.
 * Rewards: The objective function to be maximized, which could include factors such
 as safety (collision avoidance), efficiency (travel time), comfort(jerk), and compliance
 with traffic regulations.
@@ -36,7 +35,7 @@ with traffic regulations.
 that provide other agents’ states and the traffic light status.
 
 ## Sketches of Solution
-The first algorithm is SARSA with linear function approximation. Instead of updating $Q(s,a)←Q(s,a)+\alpha (r + \gamma Q(s', a') - Q(s, a))$, we use a parametric $Q(s, a; \theta)$, and update the parametres by:
+The first algorithm is SARSA with linear function approximation. Instead of updating $Q(s,a) = Q(s,a)+\alpha (r + \gamma Q(s', a') - Q(s, a))$, we use a parametric $Q(s, a; \theta)$, and update the parameters by:
 * $\delta = r + \gamma Q(s', a'; \theta) - Q(s, a; \theta)$
 * $\theta = \theta + \alpha \delta \nabla _{\theta} Q(s, a; \theta)$
 

@@ -75,33 +75,65 @@ class PlanItDataset(Dataset):
             grouped_df = df.groupby('case_id')
             for case_id, group in grouped_df:
                 # plt.figure()
-                cur_instance = {}
+                ego_track_id = None
                 track_df = group.groupby('track_id')
-                cur_instance['file_name'] = csv_file
-                cur_instance['case_id'] = case_id
                 for track_id, track in track_df:
                     # plt.plot(track['x'], track['y'])
-                    if 'ego_track_id' not in cur_instance and len(track) == 40 and track.iloc[0]['agent_type'] == "car":
-                        cur_instance['ego_track_id'] = track_id
+                    if ego_track_id is None and len(track) == 40 and track.iloc[0]['agent_type'] == "car":
+                        ego_track_id = track_id
                         break
                 frame_df = group.groupby('frame_id')
-                
+
+                last_v_long_t = None
+                last_ego_yaw_rad = None
+                last_features = None
                 for frame_id, frame in frame_df:
                     # Use ego row within this frame to get ego pose at this timestamp
-                    ego_row = frame[frame['track_id'] == cur_instance['ego_track_id']].iloc[0]
+                    ego_row = frame[frame['track_id'] == ego_track_id].iloc[0]
                     ego_x_t = float(ego_row['x'])
                     ego_y_t = float(ego_row['y'])
                     ego_psi_t = float(ego_row['psi_rad'])
+                    ego_vx_t = float(ego_row['vx'])
+                    ego_vy_t = float(ego_row['vy'])
+                    v_long_t = ego_vx_t * np.cos(ego_psi_t) + ego_vy_t * np.sin(ego_psi_t)
 
                     # Add transformed columns to the frame (ego-centric)
                     frame_with_ego = self.transform_to_ego(frame, ego_x_t, ego_y_t, ego_psi_t)
-                    
+
                     # Exclude ego itself and select the four nearest agents
-                    non_ego = frame_with_ego[frame_with_ego["track_id"] != cur_instance["ego_track_id"]]
+                    non_ego = frame_with_ego[frame_with_ego["track_id"] != ego_track_id]
                     nearest4 = non_ego.nsmallest(4, "distance")
                     features = nearest4[['transformed_x', 'transformed_y', 'transformed_psi_rad']].to_numpy()
-                    instances.append(features)
 
+                    if frame_id == 1:
+                        last_v_long_t = v_long_t
+                        last_features = features
+                        last_ego_yaw_rad = ego_psi_t
+                        continue
+                    long_acc = (v_long_t - last_v_long_t) / 0.1
+                    yaw_acc = (ego_psi_t - last_ego_yaw_rad) / 0.1
+
+                    instances.append({
+                        "features": last_features,
+                        "feature_next": features, # nearest 4 agents in ego frame
+                        "ego": {
+                            "v_x": ego_vx_t,
+                            "v_y": ego_vy_t,
+                            "psi_rad": ego_psi_t,
+                            "v_long": float(v_long_t),
+                        },
+                        "action": {
+                            "acceleration": long_acc,
+                            "yaw_acceleration": yaw_acc,
+                        },
+                        "meta": {
+                            "file_name": csv_file,
+                            "case_id": case_id,
+                            "frame_id": int(frame_id - 1),
+                            "ego_track_id": int(ego_track_id),
+                        }
+                    })
+            # break
         return instances
 
 
