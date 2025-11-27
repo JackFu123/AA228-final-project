@@ -45,19 +45,16 @@ class PlanItDataset(Dataset):
         out["distance"] = np.hypot(out["transformed_x"], out["transformed_y"])
         return out
 
-    def __init__(self, data_dir, label_agent=False):
+    def __init__(self, data_dir):
         self.data_dir = data_dir
         self.vehicle_columns = ['x', 'y', 'vx', 'vy', 'psi_rad', 'length', 'width', 'track_id']
         self.vru_columns = ['x', 'y', 'vx', 'vy', 'track_id']
         self.max_vehicle = 48
         self.max_vru = 14
+        # Map data has not been used for now
         self.max_map = 4
         self.max_lane_point_size = 20
         self.files = list_files_with_suffix(self.data_dir, '.csv')
-        self.instances = []
-        self.label_agent = label_agent
-        self.collision_data = []
-        self.index_to_col_data = {}
         self.instances = self.get_instance(self.files)
         self.total_num_samples = len(self.instances)
 
@@ -66,6 +63,19 @@ class PlanItDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.instances[idx]
+
+    def sarsa_sample(self, instance_list: list):
+        sarsa_sample = []
+        last_sample = None
+        for instance in instance_list:
+            if last_sample is None:
+                last_sample = instance
+                continue
+            current_sample = last_sample
+            current_sample['next_action'] = instance['action']
+            sarsa_sample.append(current_sample)
+            last_sample = instance
+        return sarsa_sample
 
     def get_instance(self, csv_files:list):
         instances = []
@@ -83,6 +93,7 @@ class PlanItDataset(Dataset):
                         ego_track_id = track_id
                         break
                 frame_df = group.groupby('frame_id')
+                case_instance = []
 
                 last_v_long_t = None
                 last_ego_yaw_rad = None
@@ -103,7 +114,8 @@ class PlanItDataset(Dataset):
                     # Exclude ego itself and select the four nearest agents
                     non_ego = frame_with_ego[frame_with_ego["track_id"] != ego_track_id]
                     nearest4 = non_ego.nsmallest(4, "distance")
-                    features = nearest4[['transformed_x', 'transformed_y', 'transformed_psi_rad']].to_numpy()
+                    features = nearest4[['transformed_x', 'transformed_y', 'transformed_psi_rad']]
+                    features = features.fillna(0).to_numpy()
 
                     if frame_id == 1:
                         last_v_long_t = v_long_t
@@ -113,7 +125,7 @@ class PlanItDataset(Dataset):
                     long_acc = (v_long_t - last_v_long_t) / 0.1
                     yaw_acc = (ego_psi_t - last_ego_yaw_rad) / 0.1
 
-                    instances.append({
+                    case_instance.append({
                         "features": last_features,
                         "feature_next": features, # nearest 4 agents in ego frame
                         "ego": {
@@ -133,6 +145,10 @@ class PlanItDataset(Dataset):
                             "ego_track_id": int(ego_track_id),
                         }
                     })
+                    last_v_long_t = v_long_t
+                    last_features = features
+                    last_ego_yaw_rad = ego_psi_t
+                instances.extend(self.sarsa_sample(case_instance))
             # break
         return instances
 
