@@ -12,10 +12,10 @@ def list_files_with_suffix(dir_path, suffix):
             in os.walk(dir_path) for f in files if f.endswith(suffix)]
 
 
-class PlanItDataset(Dataset):
+class SarsaDataset(Dataset):
 
     @staticmethod
-    def _wrap_angle(angle_rad: np.ndarray) -> np.ndarray:
+    def _wrap_angle(angle_rad: [np.ndarray, float]):
         """Wrap angles to [-pi, pi]."""
         return (angle_rad + np.pi) % (2 * np.pi) - np.pi
 
@@ -36,7 +36,7 @@ class PlanItDataset(Dataset):
         ty = s * dx + c * dy
 
         # Relative heading
-        rel_psi = PlanItDataset._wrap_angle(frame["psi_rad"].to_numpy(dtype=np.float64) - float(ego_psi_rad))
+        rel_psi = SarsaDataset._wrap_angle(frame["psi_rad"].to_numpy(dtype=np.float64) - float(ego_psi_rad))
 
         out = frame.copy()
         out["transformed_x"] = tx.astype(np.float64)
@@ -114,6 +114,7 @@ class PlanItDataset(Dataset):
                     # Exclude ego itself and select the four nearest agents
                     non_ego = frame_with_ego[frame_with_ego["track_id"] != ego_track_id]
                     nearest4 = non_ego.nsmallest(4, "distance")
+                    min_distance = nearest4["distance"].min()
                     features = nearest4[['transformed_x', 'transformed_y', 'transformed_psi_rad']]
                     features = features.fillna(0).to_numpy()
 
@@ -123,7 +124,7 @@ class PlanItDataset(Dataset):
                         last_ego_yaw_rad = ego_psi_t
                         continue
                     long_acc = (v_long_t - last_v_long_t) / 0.1
-                    yaw_acc = (ego_psi_t - last_ego_yaw_rad) / 0.1
+                    yaw_acc = SarsaDataset._wrap_angle(ego_psi_t - last_ego_yaw_rad) / 0.1
 
                     case_instance.append({
                         "features": last_features,
@@ -138,6 +139,7 @@ class PlanItDataset(Dataset):
                             "acceleration": long_acc,
                             "yaw_acceleration": yaw_acc,
                         },
+                        "reward": min_distance if min_distance < 10 else 0,
                         "meta": {
                             "file_name": csv_file,
                             "case_id": case_id,
@@ -145,16 +147,11 @@ class PlanItDataset(Dataset):
                             "ego_track_id": int(ego_track_id),
                         }
                     })
+                    if abs(long_acc) > 3.5:
+                        print(long_acc, yaw_acc)
                     last_v_long_t = v_long_t
                     last_features = features
                     last_ego_yaw_rad = ego_psi_t
                 instances.extend(self.sarsa_sample(case_instance))
             # break
         return instances
-
-
-if __name__ == "__main__":
-    # dataset_train = PlanItDataset("/Users/yiqunf/Documents/cousess/AA228/final_project/INTERACTION-Dataset-DR-single-v1_2/train/")
-    dataset_val = PlanItDataset("/Users/yiqunf/Documents/cousess/AA228/final_project/INTERACTION-Dataset-DR-single-v1_2/val/")
-    # print(len(dataset_train))
-    print(len(dataset_val))
