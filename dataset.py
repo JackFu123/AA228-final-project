@@ -145,11 +145,19 @@ class SarsaDataset(Dataset):
                     # Exclude ego itself and select the four nearest agents
                     non_ego = frame_with_ego[frame_with_ego["track_id"] != ego_track_id]
                     nearest4 = non_ego.nsmallest(4, "distance")
+                    if len(nearest4) == 0:
+                        last_v_long_t = None
+                        last_ego_yaw_rad = None
+                        last_features = None
+                        continue
+                    else:
+                        while len(nearest4) < 4:
+                            nearest4 = pd.concat([nearest4, nearest4.iloc[[-1]].copy()], ignore_index=True)
                     min_distance = nearest4["distance"].min()
                     features = nearest4[['transformed_x', 'transformed_y', 'transformed_psi_rad']]
                     features = features.fillna(0).to_numpy()
 
-                    if frame_id == 1:
+                    if last_features is None:
                         last_v_long_t = v_long_t
                         last_features = features
                         last_ego_yaw_rad = ego_psi_t
