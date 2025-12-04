@@ -5,10 +5,12 @@ epsilon, alpha, gamma = 0.1, 1e-2, 0.99
 
 
 def featurize(state: np.ndarray):
-    # normalize the state to 0-1
-    state = state.flatten()
-    state = (state - state.min()) / (state.max() - state.min() + 1e-8)
-    return np.asarray(state, dtype=np.float32)
+    s = np.asarray(state, dtype=np.float32)
+    X_MAX, Y_MAX = 20.0, 20.0
+    s[:, 0] = np.clip(s[:, 0], -X_MAX, X_MAX) / X_MAX
+    s[:, 1] = np.clip(s[:, 1], -Y_MAX, Y_MAX) / Y_MAX
+    s[:, 2] = s[:, 2] / np.pi  # scale to [-1, 1]
+    return s.flatten()
 
 
 def discretize_action(action):
@@ -20,7 +22,7 @@ def discretize_action(action):
         return 1
     elif acc > -1:
         return 2
-    elif yaw_acc > -3:
+    elif acc > -3:
         return 3
     else:
         return 4

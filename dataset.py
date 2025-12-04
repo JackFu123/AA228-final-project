@@ -77,6 +77,37 @@ class SarsaDataset(Dataset):
             last_sample = instance
         return sarsa_sample
 
+    def get_reward(self, nearest4, min_distance, ego_psi_t, v_long_t, long_acc, yaw_acc):
+        safety_distance = 10.0
+        p_dist = float(max(0.0, (safety_distance - float(min_distance)) / safety_distance))
+
+        # Time-to-collision (TTC) approximation for agents ahead along ego x-axis
+        tx_ahead = nearest4["transformed_x"].to_numpy(dtype=np.float64)
+        agent_v_long = nearest4["vx"].to_numpy(dtype=np.float64) * np.cos(ego_psi_t) \
+            + nearest4["vy"].to_numpy(dtype=np.float64) * np.sin(ego_psi_t)
+        rel_v_long = agent_v_long - v_long_t
+        valid_mask = (tx_ahead > 0.0) & (rel_v_long < -1e-3)
+        if np.any(valid_mask):
+            ttc_vals = tx_ahead[valid_mask] / (-rel_v_long[valid_mask])
+            min_ttc = float(np.minimum(np.min(ttc_vals), 1e6))
+        else:
+            min_ttc = float(np.inf)
+        ttc_threshold = 5.0
+        p_ttc = float(max(0.0, (ttc_threshold - min_ttc) / ttc_threshold)) if np.isfinite(min_ttc) else 0.0
+
+        # Comfort penalty (quadratic in accelerations)
+        a_max = 3.5
+        yaw_acc_max = 0.5
+        p_comfort = float((long_acc / a_max) ** 2 + (yaw_acc / yaw_acc_max) ** 2)
+        
+        # Collision penalty (hard penalty for near-collision)
+        collision_penalty = -10.0 if float(min_distance) < 1.0 else 0.0
+        
+        # Weighted sum (negative penalties)
+        w_dist, w_ttc, w_comfort = 1.0, 1.0, 0.5
+        reward = collision_penalty - (w_dist * p_dist + w_ttc * p_ttc + w_comfort * p_comfort)
+        return reward
+
     def get_instance(self, csv_files:list):
         instances = []
         for csv_file in csv_files:
@@ -125,7 +156,7 @@ class SarsaDataset(Dataset):
                         continue
                     long_acc = (v_long_t - last_v_long_t) / 0.1
                     yaw_acc = SarsaDataset._wrap_angle(ego_psi_t - last_ego_yaw_rad) / 0.1
-
+                    reward = self.get_reward(nearest4, min_distance, ego_psi_t, v_long_t, long_acc, yaw_acc)
                     case_instance.append({
                         "features": last_features,
                         "feature_next": features, # nearest 4 agents in ego frame
@@ -139,7 +170,7 @@ class SarsaDataset(Dataset):
                             "acceleration": long_acc,
                             "yaw_acceleration": yaw_acc,
                         },
-                        "reward": min_distance if min_distance < 10 else 0,
+						"reward": reward,
                         "meta": {
                             "file_name": csv_file,
                             "case_id": case_id,
@@ -148,7 +179,7 @@ class SarsaDataset(Dataset):
                         }
                     })
                     if abs(long_acc) > 3.5:
-                        print(long_acc, yaw_acc)
+                        print("large long acc: ", long_acc, "yaw acc: ", yaw_acc)
                     last_v_long_t = v_long_t
                     last_features = features
                     last_ego_yaw_rad = ego_psi_t
