@@ -117,6 +117,14 @@ class SarsaDataset(Dataset):
                     min_distance = nearest4["distance"].min()
                     features = nearest4[['transformed_x', 'transformed_y', 'transformed_psi_rad']]
                     features = features.fillna(0).to_numpy()
+                    
+                    # [NEW CODE START]
+                    # Add ego velocity information to features
+                    # Structure: [[n1_x, n1_y, n1_psi], ..., [n4_x, n4_y, n4_psi], [ego_vx, ego_vy, ego_v_long]]
+                    # We pad ego features to match neighbor feature width (3)
+                    ego_feature_row = np.array([[ego_vx_t, ego_vy_t, float(v_long_t)]])
+                    features = np.concatenate([features, ego_feature_row], axis=0)
+                    # [NEW CODE END]
 
                     if frame_id == 1:
                         last_v_long_t = v_long_t
