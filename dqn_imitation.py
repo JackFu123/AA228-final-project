@@ -178,13 +178,13 @@ def train_dqn_imitation(config: ImitationConfig) -> Dict[str, float]:
         if config.save_every_epochs > 0 and (epoch + 1) % config.save_every_epochs == 0:
             ckpt_path = f"{config.model_prefix}_epoch{epoch + 1}.pt"
             torch.save(q_net.state_dict(), ckpt_path)
-            print(f"模型已保存至 {ckpt_path}")
+            print(f"Checkpoint saved to {ckpt_path}")
 
-    # 同步并保存最终模型
+    # Synchronize and save the final model
     target_net.load_state_dict(q_net.state_dict())
     final_path = f"{config.model_prefix}_final.pt"
     torch.save(q_net.state_dict(), final_path)
-    print(f"模型已保存至 {final_path}")
+    print(f"Final model saved to {final_path}")
     return stats
 
 

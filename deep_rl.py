@@ -1,4 +1,4 @@
-"""Deep reinforcement learning utilities for ``PlanItDataset``.
+"""Deep reinforcement learning utilities for ``SarsaDataset``.
 
 This module provides a simple offline DQN/SARSA training skeleton
 built on top of :class:`dataset.SarsaDataset`. It:
@@ -11,7 +11,7 @@ built on top of :class:`dataset.SarsaDataset`. It:
   updates.
 
 Note: the INTERACTION dataset is large. Instantiating
-``PlanItDataset`` will load many CSV files, so during development it
+``SarsaDataset`` will load many CSV files, so during development it
 is recommended to use a smaller subset directory or limit
 ``max_samples``.
 """
@@ -28,10 +28,8 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from tqdm.auto import tqdm
 
-from dataset import SarsaDataset as PlanItDataset
+from dataset import SarsaDataset
 
-# DEFAULT_ACCEL_BINS = np.array([-3.0, -1.5, 0.0, 1.5, 3.0], dtype=np.float32)
-# DEFAULT_YAW_ACCEL_BINS = np.array([-1.0, -0.5, 0.0, 0.5, 1.0], dtype=np.float32)
 DEFAULT_ACCEL_BINS = np.array([-1.2001847, -0.60009235, 0, 0.60009235, 1.2001847], dtype=np.float32)
 DEFAULT_YAW_ACCEL_BINS = np.array([-0.05, -0.025, 0, 0.025, 0.05], dtype=np.float32)
 STATE_NEIGHBOR_COUNT = 4
@@ -150,23 +148,6 @@ def build_state(instance: Dict[str, Dict], use_next: bool) -> np.ndarray:
     return np.concatenate([neighbor_feat, ego_feat], axis=0)
 
 
-# def default_reward_fn(instance):
-#     accel = float(instance["action"]["acceleration"])
-#     yaw_acc = float(instance["action"]["yaw_acceleration"])
-#     v_long = float(instance["ego"]["v_long"])
-
-#     v_target = 8.0  # 目标巡航速度，m/s，大概 30km/h 可自己调
-
-#     # 1) 速度奖励：接近 v_target 越好
-#     r_speed = - ((v_long - v_target) ** 2)
-
-#     # 2) 平滑性：惩罚大油门 / 大打方向盘
-#     r_smooth = - (0.05 * abs(accel) + 0.02 * abs(yaw_acc))
-
-#     reward = 0.1 * r_speed + r_smooth
-#     return float(reward)
-
-
 def default_reward_fn(instance):
     accel = float(instance["action"]["acceleration"])
     yaw_acc = float(instance["action"]["yaw_acceleration"])
@@ -185,7 +166,7 @@ def default_reward_fn(instance):
 
 
 class PlanItTransitionDataset(Dataset):
-    """Wrap ``PlanItDataset`` samples into ``(s, a, r, s', done)`` transitions."""
+    """Wrap ``SarsaDataset`` samples into ``(s, a, r, s', done)`` transitions."""
 
     def __init__(
         self,
@@ -195,7 +176,7 @@ class PlanItTransitionDataset(Dataset):
         max_samples: Optional[int] = None,
     ) -> None:
         super().__init__()
-        self.planit = PlanItDataset(data_dir)
+        self.planit = SarsaDataset(data_dir)
         self.instances = self.planit.instances
         if max_samples is not None:
             max_samples = min(max_samples, len(self.instances))
@@ -223,7 +204,7 @@ class PlanItTransitionDataset(Dataset):
         state = build_state(inst, use_next=False)
         next_state = build_state(inst, use_next=True)
 
-        # 执行归一化
+        # Normalization
         state = (state - self.state_mean) / self.state_std
         next_state = (next_state - self.state_mean) / self.state_std
 
@@ -358,7 +339,7 @@ def train_dqn(config: TrainingConfig) -> Dict[str, float]:
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> TrainingConfig:
-    parser = argparse.ArgumentParser(description="Offline DQN training for PlanItDataset.")
+    parser = argparse.ArgumentParser(description="Offline DQN training for SarsaDataset.")
     parser.add_argument("--data-dir", type=str, required=True,
                         help="Path to the directory that contains INTERACTION CSV files.")
     parser.add_argument("--device", type=str, default="cpu",
